@@ -10,13 +10,13 @@ export const PUZZLE_PROPERTY_SCHEMAS = Object.freeze({
     kind: 'number',
     visibility: 'puzzle',
     label: 'Hardness',
-    operators: ['gt', 'eq', 'has', 'not_has'],
+    operators: ['gt', 'lt', 'eq', 'has', 'not_has'],
   }),
   blast_resistance: Object.freeze({
     kind: 'number',
     visibility: 'puzzle',
     label: 'Blast Resistance',
-    operators: ['gt', 'eq', 'has', 'not_has'],
+    operators: ['gt', 'lt', 'eq', 'has', 'not_has'],
   }),
   emits_power: Object.freeze({
     kind: 'boolean',

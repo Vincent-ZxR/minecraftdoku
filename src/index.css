@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Rajdhani:wght@500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -14,8 +14,12 @@ html, body, #root {
 
 body {
   margin: 0;
-  font-family: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
+  font-family: 'Rajdhani', 'Avenir Next', 'Segoe UI', sans-serif;
   line-height: 1.35;
+}
+
+.mc-ui {
+  font-family: 'Rajdhani', 'Avenir Next', 'Segoe UI', sans-serif;
 }
 
 button,
@@ -44,4 +48,52 @@ input {
 .mc-sprite-fallback {
   border-radius: 2px;
   background: #94a3b8;
+}
+
+@keyframes cellErrorFlash {
+  0% {
+    background-color: #ffffff;
+    border-color: #1e293b;
+  }
+  35% {
+    background-color: #fee2e2;
+    border-color: #dc2626;
+  }
+  100% {
+    background-color: #ffffff;
+    border-color: #1e293b;
+  }
+}
+
+.cell-error-flash {
+  animation: cellErrorFlash 420ms ease-out 1;
+}
+
+.mc-title {
+  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  font-size: clamp(1.4rem, 6vw, 3.4rem);
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-shadow: 0 1px 0 #e2e8f0, 0 3px 0 #cbd5e1;
+}
+
+@media (max-width: 640px) {
+  .mc-title {
+    letter-spacing: 0.02em;
+    line-height: 1.15;
+  }
+}
+
+.error-cube {
+  border: 3px solid #1e293b;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: inset -2px -2px 0 #cbd5e1;
+}
+
+.error-cube-filled {
+  background: #334155;
+  box-shadow: inset -2px -2px 0 #0f172a;
 }
