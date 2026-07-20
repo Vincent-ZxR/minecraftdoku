@@ -26,3 +26,22 @@ input {
 * {
   box-sizing: border-box;
 }
+
+.mc-sprite {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  transform: scale(1.2);
+  transform-origin: top left;
+}
+
+.block-sprite2 {
+  background-image: url('/assets/img/BlockCSS2.png');
+}
+
+.mc-sprite-fallback {
+  border-radius: 2px;
+  background: #94a3b8;
+}

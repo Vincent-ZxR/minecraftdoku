@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import { normalizeBlockDataset } from './lib/blockDataNormalizer'
+import { getPropertySchema, PUZZLE_PROPERTY_IDS } from './lib/blockDataSchema'
 
-const LOCAL_BLOCK_DATA_URL = '/data/block_data.json'
-const REMOTE_BLOCK_DATA_URL = 'https://raw.githubusercontent.com/JoakimThorsen/MCPropertyEncyclopedia/main/data/block_data.json'
-const TARGET_PROPERTIES = ['hardness', 'blast_resistance', 'requires_tool', 'blocks_motion', 'blocks_light', 'material']
-const GRID_SIZE = 3
+const LOCAL_BLOCK_DATA_URL = '/data/block_data_1.12.json'
+const REMOTE_BLOCK_DATA_URL = 'https://raw.githubusercontent.com/JoakimThorsen/MCPropertyEncyclopedia/main/data/block_data_1.12.json'
+const TARGET_PROPERTIES = PUZZLE_PROPERTY_IDS
+const GRID_SIZE = 2
 const EMPTY_PUZZLE = {
   rowClues: Array(GRID_SIZE).fill(null),
   colClues: Array(GRID_SIZE).fill(null),
@@ -12,7 +14,21 @@ const EMPTY_PUZZLE = {
 
 const UI_TEXT = {
   title: 'minecraftdoku',
-  dayTitle: 'grille du jour',
+  dayTitle: 'grille du jour 1.12',
+}
+
+function BlockIcon({ sprite, className = '' }) {
+  if (!sprite) {
+    return <span className={`mc-sprite mc-sprite-fallback ${className}`.trim()} aria-hidden="true" />
+  }
+
+  return (
+    <span
+      className={`mc-sprite ${sprite.sheet} ${className}`.trim()}
+      style={{ backgroundPosition: `${sprite.x}px ${sprite.y}px` }}
+      aria-hidden="true"
+    />
+  )
 }
 
 function randomFrom(array, seed) {
@@ -20,13 +36,6 @@ function randomFrom(array, seed) {
   const x = Math.sin(seed) * 10000
   const idx = Math.floor((x - Math.floor(x)) * array.length)
   return array[idx]
-}
-
-function normalizeValue(value) {
-  if (typeof value === 'string') return value.toLowerCase()
-  if (typeof value === 'number') return value
-  if (typeof value === 'object' && value !== null) return JSON.stringify(value)
-  return value
 }
 
 async function fetchJsonWithFallback() {
@@ -64,30 +73,45 @@ function App() {
       .catch(() => setStatus('error'))
   }, [])
 
+  const normalizedData = useMemo(() => {
+    if (!data) return null
+    return normalizeBlockDataset(data, TARGET_PROPERTIES)
+  }, [data])
+
   const blocks = useMemo(() => {
-    if (!data) return []
-    return data.key_list.map((name) => {
-      const block = { name }
+    if (!normalizedData) return []
+    return normalizedData.blocks.map((normalizedBlock) => {
+      const block = { name: normalizedBlock.name }
       TARGET_PROPERTIES.forEach((pid) => {
-        const prop = data.properties[pid]
-        if (!prop) {
-          block[pid] = null
-          return
-        }
-        block[pid] = prop.entries[name] ?? prop.default_value
+        block[pid] = normalizedBlock.properties[pid]?.value ?? null
       })
       return block
     })
+  }, [normalizedData])
+
+  const blockSprites = useMemo(() => {
+    if (!data?.sprites) return {}
+
+    return Object.entries(data.sprites).reduce((acc, [blockName, spriteData]) => {
+      if (blockName === '_legacy') return acc
+      if (!Array.isArray(spriteData) || spriteData.length < 3) return acc
+
+      acc[blockName] = {
+        sheet: spriteData[0],
+        x: spriteData[1],
+        y: spriteData[2],
+      }
+      return acc
+    }, {})
   }, [data])
 
   const propertyInfo = useMemo(() => {
     if (!data) return {}
     return TARGET_PROPERTIES.reduce((acc, pid) => {
       const prop = data.properties[pid]
-      if (!prop) return acc
       acc[pid] = {
-        name: prop.property_name,
-        description: prop.property_description,
+        name: prop?.property_name ?? getPropertySchema(pid).label ?? pid,
+        description: prop?.property_description ?? '',
       }
       return acc
     }, {})
@@ -104,6 +128,7 @@ function App() {
     const filledCells = grid.filter(Boolean).length
     return filledCells * 100
   }, [grid])
+  const maxScore = GRID_SIZE * GRID_SIZE * 100
 
   useEffect(() => {
     if (!blocks.length) return
@@ -123,8 +148,8 @@ function App() {
         const rowPid = rowClues[r]
         const colPid = colClues[c]
         const candidates = blocks.filter((block) => {
-          const rowVal = normalizeValue(block[rowPid])
-          const colVal = normalizeValue(block[colPid])
+          const rowVal = block[rowPid]
+          const colVal = block[colPid]
           return rowVal !== null && colVal !== null
         })
         puzzleBlocks.push(randomFrom(candidates, seedBase + r * GRID_SIZE + c))
@@ -183,6 +208,8 @@ function App() {
 
   const frenchDate = new Date(seed).toLocaleDateString('fr-FR')
 
+  const getSpriteForBlock = (blockName) => blockSprites[blockName] ?? null
+
   return (
     <div className="min-h-screen bg-[#f7f9ff] text-[#1a2033] px-3 py-4 sm:px-4 sm:py-6 md:py-8">
       <div className="mx-auto w-full max-w-[920px] space-y-4">
@@ -203,7 +230,7 @@ function App() {
             <p className="text-xl font-bold lowercase sm:text-2xl">{UI_TEXT.dayTitle}</p>
             <p className="text-2xl font-extrabold sm:text-3xl">{frenchDate}</p>
           </div>
-          <p className="text-xl font-bold sm:text-2xl">Score : {score}/900</p>
+          <p className="text-xl font-bold sm:text-2xl">Score : {score}/{maxScore}</p>
         </div>
 
         <section>
@@ -238,7 +265,10 @@ function App() {
                       className="aspect-square rounded-2xl border-[3px] border-slate-800 bg-white p-2 text-left transition hover:scale-[1.01] sm:rounded-3xl sm:p-3"
                     >
                       {grid[idx] ? (
-                        <p className="line-clamp-3 text-[11px] font-semibold leading-tight text-slate-800 sm:text-sm md:text-base">{grid[idx]}</p>
+                        <div className="flex items-start gap-2">
+                          <BlockIcon sprite={getSpriteForBlock(grid[idx])} className="mt-0.5 shrink-0" />
+                          <p className="line-clamp-3 text-[11px] font-semibold leading-tight text-slate-800 sm:text-sm md:text-base">{grid[idx]}</p>
+                        </div>
                       ) : (
                         <p className="text-[11px] font-semibold text-slate-400 sm:text-sm md:text-base">Select</p>
                       )}
@@ -298,7 +328,10 @@ function App() {
             <div className="mt-8 space-y-3">
               {filteredBlocks.slice(0, 8).map((block) => (
                 <div key={block.name} className="flex items-center justify-between gap-4 rounded-2xl px-1 py-2">
-                  <p className="text-base font-bold text-slate-800 sm:text-2xl">{block.name}</p>
+                  <div className="flex items-center gap-3">
+                    <BlockIcon sprite={getSpriteForBlock(block.name)} className="shrink-0" />
+                    <p className="text-base font-bold text-slate-800 sm:text-2xl">{block.name}</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleSelectForCell(block.name)}
