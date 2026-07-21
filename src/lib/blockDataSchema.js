@@ -30,6 +30,42 @@ export const PUZZLE_PROPERTY_SCHEMAS = Object.freeze({
     label: 'Material is Opaque',
     operators: ['eq', 'has', 'not_has'],
   }),
+  material_blocks_movement: Object.freeze({
+    kind: 'boolean',
+    visibility: 'puzzle',
+    label: 'Material Blocks Movement',
+    operators: ['eq', 'has', 'not_has'],
+  }),
+  material_is_liquid: Object.freeze({
+    kind: 'boolean',
+    visibility: 'puzzle',
+    label: 'Material Is Liquid',
+    operators: ['eq', 'has', 'not_has'],
+  }),
+  material_is_solid: Object.freeze({
+    kind: 'boolean',
+    visibility: 'puzzle',
+    label: 'Material Is Solid',
+    operators: ['eq', 'has', 'not_has'],
+  }),
+  material_is_burnable: Object.freeze({
+    kind: 'boolean',
+    visibility: 'puzzle',
+    label: 'Material Is Burnable',
+    operators: ['eq', 'has', 'not_has'],
+  }),
+  suffocates_mobs: Object.freeze({
+    kind: 'boolean',
+    visibility: 'puzzle',
+    label: 'Suffocates Mobs',
+    operators: ['eq', 'has', 'not_has'],
+  }),
+  material: Object.freeze({
+    kind: 'enum',
+    visibility: 'puzzle',
+    label: 'Material',
+    operators: ['eq'],
+  }),
 })
 
 export const PUZZLE_PROPERTY_IDS = Object.freeze(Object.keys(PUZZLE_PROPERTY_SCHEMAS))

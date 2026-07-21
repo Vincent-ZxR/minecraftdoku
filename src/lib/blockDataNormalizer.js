@@ -38,6 +38,155 @@ function collectLeafValues(rawValue, leaves = []) {
   return leaves
 }
 
+function toGenericToken(rawValue) {
+  const leafTokens = Array.from(
+    new Set(
+      collectLeafValues(rawValue)
+        .map((leaf) => {
+          if (leaf === null || leaf === undefined) return null
+
+          if (typeof leaf === 'number') {
+            if (!Number.isFinite(leaf)) return null
+            return `number:${leaf}`
+          }
+
+          if (typeof leaf === 'boolean') {
+            return `boolean:${leaf}`
+          }
+
+          if (typeof leaf === 'string') {
+            const normalized = leaf.trim().toLowerCase().replace(/<br\s*\/?>/gi, ' ')
+            return normalized ? `string:${normalized}` : null
+          }
+
+          return `other:${String(leaf)}`
+        })
+        .filter(Boolean),
+    ),
+  ).sort()
+
+  if (!leafTokens.length) return null
+  return leafTokens.join(' | ')
+}
+
+function buildBlockRarityStats(dataset, blockNames, propertyIds) {
+  const totalBlocks = blockNames.length
+  const tokenCountsByProperty = {}
+  const tokenByBlockAndProperty = {}
+
+  propertyIds.forEach((propertyId) => {
+    tokenCountsByProperty[propertyId] = new Map()
+    tokenByBlockAndProperty[propertyId] = {}
+
+    blockNames.forEach((blockName) => {
+      const { rawValue } = readRawPropertyValue(dataset, propertyId, blockName)
+      const token = toGenericToken(rawValue)
+
+      if (!token) return
+
+      tokenByBlockAndProperty[propertyId][blockName] = token
+      tokenCountsByProperty[propertyId].set(token, (tokenCountsByProperty[propertyId].get(token) ?? 0) + 1)
+    })
+  })
+
+  const propertyWeightById = {}
+
+  propertyIds.forEach((propertyId) => {
+    const tokenCounts = tokenCountsByProperty[propertyId]
+    const coverage = Array.from(tokenCounts.values()).reduce((sum, count) => sum + count, 0)
+    const distinctCount = tokenCounts.size
+
+    if (coverage <= 1 || distinctCount <= 1 || totalBlocks <= 1) {
+      propertyWeightById[propertyId] = 0
+      return
+    }
+
+    const probabilities = Array.from(tokenCounts.values()).map((count) => count / coverage)
+    const entropy = probabilities.reduce((sum, probability) => {
+      return probability > 0 ? sum - probability * Math.log2(probability) : sum
+    }, 0)
+
+    const maxEntropy = Math.log2(distinctCount)
+    const entropyRatio = maxEntropy > 0 ? entropy / maxEntropy : 0
+    const coverageRatio = coverage / totalBlocks
+    propertyWeightById[propertyId] = entropyRatio * coverageRatio
+  })
+
+  const rawRarityByBlockName = {}
+
+  blockNames.forEach((blockName) => {
+    let weightedScore = 0
+    let totalWeight = 0
+    let contributingProperties = 0
+
+    propertyIds.forEach((propertyId) => {
+      const propertyWeight = propertyWeightById[propertyId] ?? 0
+      if (propertyWeight <= 0) return
+
+      const token = tokenByBlockAndProperty[propertyId][blockName]
+      if (!token) return
+
+      const tokenCounts = tokenCountsByProperty[propertyId]
+      const tokenCount = tokenCounts.get(token) ?? 0
+      const coverage = Array.from(tokenCounts.values()).reduce((sum, count) => sum + count, 0)
+      if (coverage <= 0) return
+
+      const probability = tokenCount / coverage
+      const rarityUnitScore = 1 - probability
+
+      weightedScore += propertyWeight * rarityUnitScore
+      totalWeight += propertyWeight
+      contributingProperties += 1
+    })
+
+    rawRarityByBlockName[blockName] = {
+      rawScore: totalWeight > 0 ? weightedScore / totalWeight : 0,
+      contributingProperties,
+    }
+  })
+
+  const rawScores = Object.values(rawRarityByBlockName).map((entry) => entry.rawScore)
+  const minRawScore = rawScores.length ? Math.min(...rawScores) : 0
+  const maxRawScore = rawScores.length ? Math.max(...rawScores) : 1
+  const range = maxRawScore - minRawScore
+
+  const byBlockName = {}
+
+  blockNames.forEach((blockName) => {
+    const raw = rawRarityByBlockName[blockName] ?? { rawScore: 0, contributingProperties: 0 }
+    const normalizedScore = range > 0 ? ((raw.rawScore - minRawScore) / range) * 100 : 0
+    const score = Number(normalizedScore.toFixed(1))
+    const points = 1 + Math.round((score / 100) * 9)
+
+    byBlockName[blockName] = {
+      score,
+      points,
+      rawScore: Number(raw.rawScore.toFixed(6)),
+      contributingProperties: raw.contributingProperties,
+    }
+  })
+
+  const sortedByScoreDesc = [...blockNames].sort((a, b) => {
+    const scoreDiff = (byBlockName[b]?.score ?? 0) - (byBlockName[a]?.score ?? 0)
+    if (scoreDiff !== 0) return scoreDiff
+    return a.localeCompare(b)
+  })
+
+  return {
+    byBlockName,
+    summary: {
+      blockCount: totalBlocks,
+      propertyCount: propertyIds.length,
+      minScore: byBlockName[sortedByScoreDesc.at(-1)]?.score ?? 0,
+      maxScore: byBlockName[sortedByScoreDesc[0]]?.score ?? 0,
+      topBlocks: sortedByScoreDesc.slice(0, 10).map((blockName) => ({
+        name: blockName,
+        ...byBlockName[blockName],
+      })),
+    },
+  }
+}
+
 function parseNumberValue(rawValue) {
   if (typeof rawValue === 'number') return Number.isFinite(rawValue) ? rawValue : null
 
@@ -250,12 +399,22 @@ export function normalizeBlockDataset(dataset, propertyIds = PUZZLE_PROPERTY_IDS
   const blockNames = dataset?.key_list ?? []
   const normalizedBlocks = blockNames.map((blockName) => normalizeBlock(dataset, blockName, propertyIds))
   const allPropertyIds = Object.keys(dataset?.properties ?? {})
+  const rarity = buildBlockRarityStats(dataset, blockNames, allPropertyIds)
 
   return {
     schemas: listPuzzlePropertySchemas(),
     propertyIds,
-    blocks: normalizedBlocks,
+    blocks: normalizedBlocks.map((block) => ({
+      ...block,
+      rarity: rarity.byBlockName[block.name] ?? {
+        score: 0,
+        points: 1,
+        rawScore: 0,
+        contributingProperties: 0,
+      },
+    })),
     propertyStats: buildPropertyStats(normalizedBlocks, propertyIds),
     excludedPropertyIds: listExcludedPropertyIds(allPropertyIds),
+    rarity,
   }
 }
