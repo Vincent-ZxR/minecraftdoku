@@ -278,6 +278,12 @@ function formatPossibleCount(count) {
   return `${count} possible answers`
 }
 
+function buildSeedGameUrl(seed) {
+  const url = new URL(window.location.origin + window.location.pathname)
+  url.searchParams.set('seed', seed)
+  return url.toString()
+}
+
 function formatRarityLabel(score) {
   if (!Number.isFinite(score)) return 'Rarity 0.0'
   return `Rarity ${score.toFixed(1)}`
@@ -820,8 +826,7 @@ function App() {
   }
 
   const buildShareMessage = () => {
-    const seedUrl = new URL(window.location.href)
-    seedUrl.searchParams.set('seed', seed)
+    const seedUrl = buildSeedGameUrl(seed)
     const outcomeLabel = gameState === 'won' ? 'Victory' : 'Defeat'
 
     return [
@@ -831,7 +836,7 @@ function App() {
       `Tries today: ${tryCount}`,
       `Result: ${gameState === 'won' ? 'Won' : 'Lost'}`,
       `Seed: ${seed}`,
-      seedUrl.toString(),
+      seedUrl,
     ].join('\n')
   }
 
@@ -944,9 +949,7 @@ function App() {
   }
 
   const handleCopySeedLink = async () => {
-    const url = new URL(window.location.href)
-    url.searchParams.set('seed', seed)
-    const text = url.toString()
+    const text = buildSeedGameUrl(seed)
 
     const copied = await copyTextToClipboard(text)
 
