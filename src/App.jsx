@@ -289,6 +289,22 @@ function formatRarityLabel(score) {
   return `Rarity ${score.toFixed(1)}`
 }
 
+function buildRarityDistribution(blocks) {
+  const countsByPoints = new Map()
+
+  blocks.forEach((block) => {
+    const points = Number.isFinite(block?.rarityPoints) ? Math.max(1, Math.round(block.rarityPoints)) : 1
+    countsByPoints.set(points, (countsByPoints.get(points) ?? 0) + 1)
+  })
+
+  return Array.from(countsByPoints.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([points, count]) => ({
+      points,
+      count,
+    }))
+}
+
 function buildCriterionPool(blocks) {
   if (!blocks.length) return []
 
@@ -533,7 +549,47 @@ function App() {
     return blocks.filter((block) => block.name.toLowerCase().includes(query))
   }, [blocks, pickerQuery])
 
+  const popupPossibleAnswers = useMemo(() => {
+    if (!pickerOpen || activeCellIndex === null || activeCellIndex < 0) return []
+
+    if (pickerMode === 'answers') {
+      return possibleAnswers
+    }
+
+    const { rowIndex, colIndex } = getCellCoordinates(activeCellIndex)
+    const rowCriterion = rowClues[rowIndex]
+    const colCriterion = colClues[colIndex]
+    const usedBlockNames = new Set(grid.filter(Boolean))
+
+    return blocks.filter((block) => {
+      if (usedBlockNames.has(block.name) && grid[activeCellIndex] !== block.name) return false
+      return evaluateCriterion(block, rowCriterion) && evaluateCriterion(block, colCriterion)
+    })
+  }, [activeCellIndex, blocks, colClues, grid, pickerMode, pickerOpen, possibleAnswers, rowClues])
+
+  const possibleAnswersRarityDistribution = useMemo(() => {
+    if (!popupPossibleAnswers.length) return []
+    return buildRarityDistribution(popupPossibleAnswers)
+  }, [popupPossibleAnswers])
+
+  const popupRarityHistogramBuckets = useMemo(() => {
+    const countsByPoints = new Map(possibleAnswersRarityDistribution.map((bucket) => [bucket.points, bucket.count]))
+    return Array.from({ length: 10 }, (_, index) => {
+      const points = index + 1
+      return {
+        points,
+        count: countsByPoints.get(points) ?? 0,
+      }
+    })
+  }, [possibleAnswersRarityDistribution])
+
+  const maxRarityBucketCount = useMemo(() => {
+    if (!possibleAnswersRarityDistribution.length) return 0
+    return Math.max(...possibleAnswersRarityDistribution.map((bucket) => bucket.count))
+  }, [possibleAnswersRarityDistribution])
+
   const isGameOver = gameState === 'won' || gameState === 'lost'
+  const hasPuzzle = rowClues.every(Boolean) && colClues.every(Boolean)
 
   const blocksByName = useMemo(() => {
     const index = {}
@@ -542,6 +598,61 @@ function App() {
     })
     return index
   }, [blocks])
+
+  const maxPossibleScore = useMemo(() => {
+    if (!hasPuzzle || !blocks.length) return 0
+
+    const cellCount = GRID_SIZE * GRID_SIZE
+    const fullMask = (1 << cellCount) - 1
+    const NEG_INF = Number.NEGATIVE_INFINITY
+
+    const compatibleCellMasks = blocks.map((block) => {
+      let mask = 0
+
+      for (let cellIndex = 0; cellIndex < cellCount; cellIndex += 1) {
+        const { rowIndex, colIndex } = getCellCoordinates(cellIndex)
+        const rowCriterion = rowClues[rowIndex]
+        const colCriterion = colClues[colIndex]
+
+        if (evaluateCriterion(block, rowCriterion) && evaluateCriterion(block, colCriterion)) {
+          mask |= 1 << cellIndex
+        }
+      }
+
+      return mask
+    })
+
+    let dp = Array(1 << cellCount).fill(NEG_INF)
+    dp[0] = 0
+
+    blocks.forEach((block, blockIndex) => {
+      const mask = compatibleCellMasks[blockIndex]
+      if (!mask) return
+
+      const points = Number.isFinite(block.rarityPoints) ? block.rarityPoints : 1
+      const next = dp.slice()
+
+      for (let state = 0; state <= fullMask; state += 1) {
+        if (dp[state] === NEG_INF) continue
+
+        const available = mask & ~state
+        if (!available) continue
+
+        for (let cellBit = available; cellBit; cellBit &= cellBit - 1) {
+          const bit = cellBit & -cellBit
+          const nextState = state | bit
+          const nextScore = dp[state] + points
+          if (nextScore > next[nextState]) {
+            next[nextState] = nextScore
+          }
+        }
+      }
+
+      dp = next
+    })
+
+    return dp[fullMask] === NEG_INF ? 0 : dp[fullMask]
+  }, [blocks, colClues, hasPuzzle, rowClues])
 
   const getPossibleBlocksForCell = (cellIndex, excludeUsedBlocks = true) => {
     if (!Number.isInteger(cellIndex) || cellIndex < 0) return []
@@ -725,7 +836,6 @@ function App() {
   }, [blocks, criterionPool, seed])
 
   useEffect(() => {
-    const hasPuzzle = rowClues.every(Boolean) && colClues.every(Boolean)
     if (!hasPuzzle || !blocks.length) return
     if (restoredStateSeedRef.current === seed) return
 
@@ -841,7 +951,7 @@ function App() {
   }
 
   const handleCellClick = (index) => {
-    if (gameState === 'lost') {
+    if (isGameOver) {
       const answers = getPossibleBlocksForCell(index, false)
       setPossibleAnswers(answers)
       setActiveCellIndex(index)
@@ -851,7 +961,6 @@ function App() {
       return
     }
 
-    if (isGameOver) return
     if (grid[index]) return
     setActiveCellIndex(index)
     setPickerMode('pick')
@@ -1029,7 +1138,7 @@ function App() {
                 className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                 aria-haspopup="dialog"
               >
-                V2
+                V3
               </button>
             </div>
 
@@ -1049,7 +1158,12 @@ function App() {
         </header>
 
         <div className="min-h-8 text-sm font-semibold sm:text-base">
-          {gameState === 'won' && <p className="text-emerald-700">Victory! Grid completed.</p>}
+          {gameState === 'won' && (
+            <div className="space-y-1">
+              <p className="text-emerald-700">Victory! Grid completed.</p>
+              <p className="text-slate-700">Click any cell to view the possible valid answers for that case.</p>
+            </div>
+          )}
           {gameState === 'lost' && (
             <div className="space-y-1">
               <p className="text-rose-700">Defeat. You reached 3 errors.</p>
@@ -1127,7 +1241,7 @@ function App() {
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
           <p className="text-sm font-semibold text-slate-600 sm:text-base">Author: Team23</p>
           <div className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-base font-bold text-slate-800 sm:text-lg">
-            Score: {score}
+            Score: {score}/{maxPossibleScore}
           </div>
           <div className="flex items-center gap-3 text-lg font-semibold text-slate-800 sm:text-xl">
             <span>Errors</span>
@@ -1213,7 +1327,39 @@ function App() {
                 <p className="text-sm text-slate-500 sm:text-lg">No valid answers found for this cell.</p>
               )}
             </div>
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+              {possibleAnswersRarityDistribution.length > 0 ? (
+                <div className="min-w-[220px] flex-1 px-1 py-1">
+                  <div className="grid h-8 grid-cols-10 items-end gap-1" aria-label="Rarity distribution histogram">
+                    {popupRarityHistogramBuckets.map((bucket) => {
+                      const barHeightPx =
+                        bucket.count > 0 && maxRarityBucketCount > 0
+                          ? Math.max(2, Math.round((bucket.count / maxRarityBucketCount) * 24))
+                          : 0
+
+                      return (
+                        <div key={bucket.points} className="flex h-full items-end">
+                          <div
+                            className="w-full rounded-sm bg-emerald-500/90"
+                            style={{ height: `${barHeightPx}px` }}
+                            title={`+${bucket.points} pts: ${bucket.count}`}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-1 grid grid-cols-10 gap-1 text-[10px] font-semibold leading-none text-slate-500">
+                    {popupRarityHistogramBuckets.map((bucket) => (
+                      <span key={`tick-${bucket.points}`} className="text-center">
+                        {bucket.points}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div />
+              )}
+
               <button
                 type="button"
                 onClick={() => {
@@ -1232,19 +1378,19 @@ function App() {
       )}
 
       {v2PopupOpen && (
-        <div className="fixed inset-0 z-[55] bg-slate-900/35 px-4 py-10" role="dialog" aria-modal="true" aria-labelledby="v2-features-title">
+        <div className="fixed inset-0 z-[55] bg-slate-900/35 px-4 py-10" role="dialog" aria-modal="true" aria-labelledby="v3-features-title">
           <div className="mx-auto w-full max-w-[560px] rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-2xl sm:p-7">
             <div className="space-y-4">
               <div className="inline-flex rounded-full border border-slate-300 px-3 py-1 text-xs font-extrabold tracking-[0.18em] text-slate-700">
-                VERSION 2
+                VERSION 3
               </div>
-              <h2 id="v2-features-title" className="text-2xl font-extrabold text-slate-900 sm:text-3xl">
-                New features in V2
+              <h2 id="v3-features-title" className="text-2xl font-extrabold text-slate-900 sm:text-3xl">
+                New features in V3
               </h2>
               <ul className="list-disc space-y-2 pl-6 text-base font-semibold text-slate-700 sm:text-lg">
-                <li>Rarity score for each block to reward harder picks.</li>
-                <li>Cached each player&apos;s daily progress so games continue after refresh.</li>
-                <li>More block criterion variety for richer row and column clues.</li>
+                <li>Max score displayed.</li>
+                <li>Possibility to check the answer after finishing the grid.</li>
+                <li>Rarity distribution info displayed for each cell.</li>
               </ul>
               <div className="flex justify-end pt-1">
                 <button
