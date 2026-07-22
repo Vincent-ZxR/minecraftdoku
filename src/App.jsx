@@ -1239,7 +1239,7 @@ function App() {
         </section>
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
-          <p className="text-sm font-semibold text-slate-600 sm:text-base">Author: Team23</p>
+          <p className="text-sm font-semibold text-slate-600 sm:text-base">Team23</p>
           <div className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-base font-bold text-slate-800 sm:text-lg">
             Score: {score}/{maxPossibleScore}
           </div>
