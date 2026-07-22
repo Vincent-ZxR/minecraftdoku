@@ -941,7 +941,7 @@ function App() {
 
     return [
       `Minecraftdoku ${outcomeLabel}`,
-      `Score: ${score}`,
+      `Score: ${score}/${maxPossibleScore}`,
       `Errors: ${errorCount}/${MAX_ERRORS}`,
       `Tries today: ${tryCount}`,
       `Result: ${gameState === 'won' ? 'Won' : 'Lost'}`,
@@ -1417,7 +1417,7 @@ function App() {
                 {gameState === 'won' ? 'You completed the grid' : 'Three errors reached'}
               </h2>
               <p className="text-base font-semibold text-slate-700 sm:text-lg">
-                Final score {score} • Errors {errorCount}/{MAX_ERRORS}
+                Final score {score}/{maxPossibleScore} • Errors {errorCount}/{MAX_ERRORS}
               </p>
               <p className="text-sm font-semibold text-slate-600 sm:text-base">Try #{tryCount} today</p>
               <div className="flex flex-wrap justify-center gap-2 pt-2">
