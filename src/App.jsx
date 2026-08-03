@@ -550,6 +550,25 @@ function App() {
     return blocks.filter((block) => block.name.toLowerCase().includes(query))
   }, [blocks, pickerQuery])
 
+  const usedBlockNames = useMemo(() => new Set(grid.filter(Boolean)), [grid])
+
+  const pickerBlocks = useMemo(() => {
+    if (!filteredBlocks.length) return []
+
+    const unusedBlocks = []
+    const usedBlocks = []
+
+    filteredBlocks.forEach((block) => {
+      if (usedBlockNames.has(block.name)) {
+        usedBlocks.push(block)
+      } else {
+        unusedBlocks.push(block)
+      }
+    })
+
+    return [...unusedBlocks, ...usedBlocks]
+  }, [filteredBlocks, usedBlockNames])
+
   const popupPossibleAnswers = useMemo(() => {
     if (!pickerOpen || activeCellIndex === null || activeCellIndex < 0) return []
 
@@ -1286,12 +1305,20 @@ function App() {
 
             <div className="mt-8 max-h-[60vh] space-y-3 overflow-y-auto pr-1">
               {pickerMode === 'pick' &&
-                filteredBlocks.map((block) => (
+                pickerBlocks.map((block) => {
+                  const isUsed = usedBlockNames.has(block.name)
+
+                  return (
                   <button
                     key={block.name}
                     type="button"
                     onClick={() => handleSelectForCell(block.name)}
-                    className="flex w-full items-center justify-between gap-4 rounded-2xl border border-transparent px-1 py-2 text-left transition hover:border-slate-300 hover:bg-slate-50"
+                    disabled={isUsed}
+                    className={`flex w-full items-center justify-between gap-4 rounded-2xl border border-transparent px-1 py-2 text-left transition ${
+                      isUsed
+                        ? 'cursor-not-allowed opacity-45 grayscale'
+                        : 'hover:border-slate-300 hover:bg-slate-50'
+                    }`}
                   >
                     <div className="flex items-center gap-3">
                       <BlockIcon sprite={getSpriteForBlock(block.name)} className="shrink-0" />
@@ -1299,12 +1326,15 @@ function App() {
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{formatRarityLabel(block.rarityScore)}</p>
-                      <p className="text-sm font-bold text-emerald-700">+{block.rarityPoints} pts</p>
+                      <p className={`text-sm font-bold ${isUsed ? 'text-slate-500' : 'text-emerald-700'}`}>
+                        {isUsed ? 'Used' : `+${block.rarityPoints} pts`}
+                      </p>
                     </div>
                   </button>
-                ))}
+                  )
+                })}
 
-              {pickerMode === 'pick' && filteredBlocks.length === 0 && (
+              {pickerMode === 'pick' && pickerBlocks.length === 0 && (
                 <p className="text-sm text-slate-500 sm:text-lg">No blocks found.</p>
               )}
 
