@@ -355,6 +355,7 @@ function buildCriterionPool(blocks) {
   addCriterion({ kind: 'boolean', propertyId: 'suffocates_mobs', expected: false, label: 'Suffocates Mobs' }, 'suffocates_mobs')
 
   materialValues.forEach((materialValue) => {
+    if (materialValue.trim().toLowerCase() === 'iron') return
     addCriterion({ kind: 'enum', propertyId: 'material', operator: 'eq', value: materialValue, label: 'Material' }, 'material')
   })
 
