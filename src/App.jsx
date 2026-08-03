@@ -1158,7 +1158,7 @@ function App() {
                 className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-bold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
                 aria-haspopup="dialog"
               >
-                V3
+                V4
               </button>
             </div>
 
@@ -1413,15 +1413,14 @@ function App() {
           <div className="mx-auto w-full max-w-[560px] rounded-3xl border-2 border-slate-200 bg-white p-6 shadow-2xl sm:p-7">
             <div className="space-y-4">
               <div className="inline-flex rounded-full border border-slate-300 px-3 py-1 text-xs font-extrabold tracking-[0.18em] text-slate-700">
-                VERSION 3
+                VERSION 4
               </div>
               <h2 id="v3-features-title" className="text-2xl font-extrabold text-slate-900 sm:text-3xl">
-                New features in V3
+                New features in V4
               </h2>
               <ul className="list-disc space-y-2 pl-6 text-base font-semibold text-slate-700 sm:text-lg">
-                <li>Max score displayed.</li>
-                <li>Possibility to check the answer after finishing the grid.</li>
-                <li>Rarity distribution info displayed for each cell.</li>
+                <li>Used blocks are greyed out and moved to the bottom of the list.</li>
+                <li>Material is iron is no longer part of the criterion pool.</li>
               </ul>
               <div className="flex justify-end pt-1">
                 <button
